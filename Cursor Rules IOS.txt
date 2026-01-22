@@ -1,0 +1,458 @@
+# Universal iOS App Development Rules
+
+## Important Meta Rules
+- Always add debug logs & comments in the code for easier debug & readability
+- Every time you choose to apply a rule(s), explicitly state the rule(s) in the output. You can abbreviate the rule description to a single word or phrase
+- Do not make any changes until you have 95% confidence that you know what to build. Ask me follow up questions until you have that confidence.
+
+## Project Structure
+- All files go inside the main app folder (e.g., `/AppName`)
+- The main Swift file is `AppNameApp.swift`
+- Organize into folders: Models, Views, ViewModels, Services, Utilities, Extensions
+
+## Tech Stack
+- SwiftUI for frontend (Fallback with UIKit if absolutely necessary)
+- Swift for code and logic
+- iOS 18+ minimum deployment target
+- SwiftData for local data persistence
+- CloudKit for iCloud sync
+- No third-party dependencies unless explicitly approved
+- No analytics by default
+- No backend server (all data stored locally and synced via iCloud)
+- No monetization features by default
+- Completely free apps by default
+
+---
+
+# Swift Specific Rules
+
+## 0. General Coding Principles
+- Always prefer simple solutions over clever ones
+- Avoid duplication of code - check for existing similar functionality before creating new code
+- Write code that works correctly in dev, test, and prod environments
+- Only make changes that are requested or well understood and related to the request
+- When fixing bugs, exhaust all options with existing implementation before introducing new patterns
+- If introducing a new pattern, remove the old implementation to avoid duplicate logic
+- Keep the codebase very clean and organized
+- Avoid writing one-off scripts in production code files
+- Keep files under 200-300 lines - refactor when exceeding this
+- Mock data is ONLY for tests, never for dev or prod
+- Never add stubbing or fake data patterns that affect dev or prod environments
+- Never overwrite .env or config files without explicit confirmation
+
+## 1. State Management
+
+### Property Wrappers & Observation
+- Annotate view models with `@Observable`, e.g. `@Observable final class MyViewModel`
+- Do NOT use `@State` in SwiftUI Views for view model observation. Instead, use `let viewModel: MyViewModel`
+- For reference type state shared with a child view, pass the dependency to the constructor of the child view
+- For value type state shared with a child view:
+  - Use SwiftUI `@Binding` if and only if the child needs write access
+  - Pass the value directly if the child only needs read access
+- Use `@Environment` for state shared throughout the entire app or large sections
+- Use `@State` only for local state managed by the view itself
+- Use `@AppStorage` for simple user preferences that should persist
+
+### MVVM Pattern
+- Enforce MVVM for medium-to-large views (100+ lines or complex logic)
+- Allow simple, single-purpose views (<100 lines) to skip ViewModel for pragmatism
+- ViewModels should be marked `@Observable` and contain all business logic
+- Views should be dumb - only UI and binding logic
+- Never put business logic directly in Views
+
+## 2. Performance Optimization
+
+- Implement lazy loading for large lists using `LazyVStack` or `LazyHStack`
+- Optimize ForEach loops by using stable, unique identifiers
+- Keep lists performant even with thousands of items
+- Use pagination when loading large datasets (load in batches of 50-100)
+- Minimize re-renders by keeping views small and focused
+- Use `@ViewBuilder` for conditional view logic to avoid unnecessary recomposition
+- Profile with Instruments for any performance-critical features
+- Cache expensive computations when appropriate
+
+## 3. Data Persistence (SwiftData)
+
+### Models
+- Use SwiftData models with `@Model` macro for all persisted data
+- Keep models simple and focused - one model per entity
+- Use appropriate data types (String, Date, Int, Bool, etc.)
+- Implement relationships between models when needed (@Relationship)
+- Add computed properties for derived data, not stored properties
+
+### Persistence Strategy
+- Implement auto-save immediately on user actions (no manual save required)
+- Always handle data loading failures gracefully with user-friendly messages
+- Never delete user data without confirmation dialog
+- Use efficient queries with predicates and sorting
+- Implement default sorting that makes sense for the data (chronological, alphabetical, etc.)
+- Test with varying amounts of data (empty state, 1 item, 100+ items, 1000+ items)
+
+### Data Migration
+- Plan for schema changes from version 1
+- Implement migration plans when changing models
+- Test migrations thoroughly with real user data scenarios
+
+## 4. iCloud Sync (CloudKit)
+
+### Sync Strategy
+- Automatic background sync - no user controls needed
+- Offline-first: App works fully offline, syncs when connection returns
+- Use CloudKit's `CKContainer` with default container
+- Leverage SwiftData's native CloudKit integration when possible
+- Implement proper conflict resolution (last-write-wins by default)
+
+
+### Error Handling
+- Graceful degradation when iCloud is unavailable
+- Show banner explaining iCloud issues with "Learn More" button
+- Keep app fully functional offline even without iCloud
+- Handle common errors:
+  - iCloud not enabled: Show setup instructions
+  - Storage full: Suggest managing iCloud storage
+  - Network issues: Indicate offline mode, will sync later
+- Never block core functionality due to sync issues
+
+### Sync Best Practices
+- Batch sync operations to minimize battery and network usage
+- Use efficient queries to only sync what changed
+- Handle sync in background tasks
+- Test thoroughly with multiple devices
+- Test airplane mode scenarios
+- Test iCloud account switching
+
+## 5. SwiftUI Lifecycle
+
+- Use `@main` and `App` protocol for app entry point
+- Implement `Scene`s for managing app structure
+- Use `WindowGroup` for primary app content
+- Use appropriate lifecycle methods:
+  - `.onAppear` for view setup
+  - `.onDisappear` for cleanup
+  - `.task` for async operations tied to view lifecycle
+  - `.onChange` for reacting to state changes
+- Ensure proper focus management with `.focused()` modifier
+- Handle keyboard lifecycle appropriately
+
+## 6. Data Flow
+
+- Use Observation framework (`@Observable`, `@State`, `@Binding`) for reactive views
+- Keep data flow unidirectional and predictable
+- Implement proper error handling and propagation
+- Use async/await for asynchronous operations
+- Avoid callback hell - prefer structured concurrency
+- Data should flow: User Action → ViewModel → Model → SwiftData → CloudKit
+
+## 7. Dependency Injection
+
+- Keep it simple with property passing
+- Pass dependencies through initializers
+- Use `@Environment` for app-wide dependencies
+- Avoid formal DI frameworks unless app complexity demands it
+- Make dependencies explicit, not hidden
+
+## 8. Error Handling
+
+### Centralized Error Handler
+- Create a shared `ErrorHandler` service for consistent error management
+- Define common error types in an enum
+- Provide user-friendly error messages
+- Log errors for debugging (with proper log levels)
+- Show errors via alerts, banners, or inline messages as appropriate
+
+### Error Presentation
+- Use `.alert` for critical errors requiring acknowledgment
+- Use banner notifications for non-critical errors
+- Use inline error text for form validation
+- Always provide actionable next steps in error messages
+- Never show raw error dumps to users
+
+## 9. Testing
+
+### Unit Tests
+- Aim for 60-70% code coverage
+- Focus on business logic and data layer
+- Test ViewModels thoroughly
+- Test data persistence and sync logic
+- Use XCTest framework
+- Mock CloudKit operations for deterministic tests
+- Keep tests fast and isolated
+
+### UI Tests
+- Test critical paths only:
+  - App launch and onboarding
+  - Main user flows
+  - Data persistence scenarios
+  - iCloud sync scenarios (if testable)
+- Use XCUITest framework
+- Keep UI tests maintainable and reliable
+- Avoid testing every edge case in UI tests
+
+### Preview Testing
+- Use SwiftUI Previews extensively during development
+- Create previews for different states (empty, loading, error, populated)
+- Test light and dark mode in previews
+- Test different device sizes in previews
+
+## 10. SwiftUI Design Patterns
+
+### View Composition
+- Extract subviews when views exceed 150-200 lines
+- Use `@ViewBuilder` for conditional rendering
+- Implement custom `PreferenceKey`s for child-to-parent communication when needed
+- Keep views focused on a single responsibility
+- Use view modifiers for reusable styling
+
+### Navigation
+- Use NavigationStack for iOS 18+ (not NavigationView)
+- Implement deep linking support
+- Handle navigation state properly
+- Test back button behavior thoroughly
+
+### Lists and Collections
+- Use native `List` or `ScrollView` with `LazyVStack`
+- Implement pull-to-refresh when appropriate
+- Add empty state views for lists with no data
+- Use `.searchable` modifier for search functionality
+
+## 11. iOS 18+ UI/UX Guidelines
+
+### Design System
+- **Strict adherence to Apple's Human Interface Guidelines**
+- Use system components by default:
+  - Native buttons, text fields, pickers
+  - System colors (Color.primary, .secondary, .accentColor)
+  - System fonts (San Francisco)
+  - Standard spacing and padding
+- Only use custom styling when it improves UX AND explicitly requested
+- Support both light and dark mode automatically
+- Use SF Symbols for all icons
+- Follow iOS 18 design patterns and conventions
+
+### Animations
+- Use iOS 18's modern animation APIs
+- Prefer `.animation()` modifier with proper animation values
+- Use spring animations for natural feel
+- Implement fluid, interruptible animations
+- Don't over-animate - be subtle and purposeful
+- Add haptic feedback where appropriate (light impact for confirmations)
+
+### Accessibility
+- All interactive elements must have accessibility labels
+- Support Dynamic Type (text sizing)
+- Ensure sufficient color contrast (WCAG AA minimum)
+- Full VoiceOver support for all features
+- Test with Accessibility Inspector
+- Support Voice Control
+- Keyboard navigation support where applicable
+
+### Safe Areas & Layout
+- Respect safe area insets on all devices
+- Test on devices with notches/Dynamic Island
+- Use proper spacing and padding (system spacing preferred)
+- Support landscape orientation where it makes sense
+- Test on all device sizes (iPhone SE to iPhone Pro Max, iPad)
+
+## 12. Widgets & Live Activities
+
+### Home Screen Widgets
+- All apps should support at least one home screen widget
+- Use WidgetKit framework
+- Support small, medium, and large widget sizes when appropriate
+- Update widgets efficiently (don't drain battery)
+- Provide meaningful glanceable information
+- Test widget updates and deep linking
+
+### Live Activities
+- Implement Live Activities for time-sensitive features
+- Use ActivityKit framework
+- Keep Live Activities focused and simple
+- Update efficiently via push notifications when possible
+- Test on lock screen and Dynamic Island
+
+## 13. Security & Privacy
+
+### Data Protection
+- All local data stays within app sandbox
+- Use encryption for sensitive data (Keychain for credentials)
+- Follow Apple's privacy guidelines
+- Request permissions properly with clear explanations
+- Implement App Privacy Details in App Store Connect
+
+### iCloud Security
+- Leverage CloudKit's built-in encryption
+- Never store passwords or sensitive tokens in CloudKit
+- Use CloudKit's private database for user data
+- Implement proper authentication checks
+
+## 14. Common App Features (Include by Default)
+
+### Settings Screen
+- Always include a Settings screen
+- Common settings:
+  - iCloud sync status and info
+  - Appearance (if custom options exist)
+  - Notifications preferences
+  - Data management (export, clear all)
+- Use native Settings UI components
+
+### About/Credits Screen
+- App version number
+- Build number (in debug builds)
+- Credits/acknowledgments
+- Link to privacy policy (if applicable)
+- Link to support/feedback
+
+### Data Management
+- Export data feature (as JSON or CSV)
+- "Clear All Data" option with confirmation dialog
+- Import data feature (if applicable)
+- Show data storage size
+
+### Onboarding
+- Customize per app, but follow standard pattern:
+  - 3-5 screens maximum
+  - Skip button always visible
+  - System-style pagination dots
+  - Clear value proposition on each screen
+  - Permission requests in context, not upfront
+- Store onboarding completion status in UserDefaults/@AppStorage
+
+## 15. Declarations & Naming
+
+### Before Creating New Types
+- Check if struct/class/enum already exists in project
+- Search codebase thoroughly to avoid duplication
+- Use descriptive names that clearly indicate purpose
+
+### Naming Conventions
+- Views: `ContentView`, `SettingsView`, `ItemDetailView`
+- ViewModels: `ContentViewModel`, `SettingsViewModel`
+- Models: `Item`, `User`, `Task` (descriptive nouns)
+- Services: `DataService`, `SyncService`, `ErrorHandler`
+- Use clear, self-documenting names
+- Avoid abbreviations unless universally understood
+
+### File Organization
+- One primary type per file
+- Group related files in folders
+- Keep related views together
+- Separate Models, Views, ViewModels, Services, Utilities
+
+## 16. User Experience Principles
+
+### App Launch
+- Launch quickly (< 1 second to first screen on modern devices)
+- Show appropriate launch screen
+- Handle first launch vs. returning user
+- Initialize CloudKit connection in background
+
+### Loading States
+- Show loading indicators for operations > 0.5 seconds
+- Use ProgressView for indeterminate loading
+- Use custom progress UI for determinate progress
+- Never block UI without indication
+- Support pull-to-refresh where appropriate
+
+### Error States
+- Show friendly, actionable error messages
+- Provide "Try Again" options
+- Maintain app state during errors
+- Log errors for debugging
+- Never crash - always handle errors gracefully
+
+### Empty States
+- Design thoughtful empty states
+- Explain why it's empty
+- Provide clear call-to-action
+- Make empty states visually appealing
+- Test empty state on first launch
+
+### Confirmation Dialogs
+- Always confirm destructive actions
+- Use clear, specific language
+- "Cancel" button on left, action button on right
+- Use red color for destructive actions
+- Don't overuse confirmations - only for important actions
+
+### Keyboard Management
+- Use `.focused()` state for keyboard control
+- Dismiss keyboard appropriately
+- Don't let keyboard obscure content
+- Smooth keyboard animations
+- Test keyboard behavior on actual devices
+
+## 17. Performance Targets
+
+- App launch: < 1 second to usable state
+- User interactions: < 0.1 second response time
+- List scrolling: Consistent 60fps (120fps on ProMotion displays)
+- Search: Results appear as user types (< 0.2 seconds)
+- Data operations: < 0.3 seconds for local operations
+- Sync operations: Background, non-blocking
+- Memory: Efficient usage, no leaks
+- Battery: Minimal impact during normal use
+
+## 18. Edge Cases to Handle
+
+### Data Edge Cases
+- Empty states (first launch, no data)
+- Very large datasets (thousands of items)
+- Data corruption or migration failures
+- Concurrent data access
+- Rapid user actions (prevent duplicate operations)
+
+### Network Edge Cases
+- Offline mode (no internet)
+- Poor connection (timeouts)
+- Airplane mode
+- iCloud unavailable
+- Account changes (user signs out/switches accounts)
+
+### Device Edge Cases
+- Low storage space
+- Low battery/power mode
+- Background app refresh disabled
+- Notifications disabled
+- Different device sizes and orientations
+- Older devices (test on oldest supported iOS version)
+
+### User Edge Cases
+- Deleting items while viewing/editing
+- Navigating away during operations
+- Force quitting app mid-operation
+- Device rotation during interactions
+- Accessibility features enabled (VoiceOver, larger text)
+
+## 19. Debugging & Logging
+
+### Logging Strategy
+- Use `print()` for simple debug logs (remove before production)
+- Use `os.log` for production logging
+- Define log categories (networking, data, UI, sync)
+- Use appropriate log levels (debug, info, error)
+- Include relevant context in logs
+- Never log sensitive user data
+
+### Debug Features
+- Enable debug menu in debug builds
+- Show app version and build number
+- Allow manual sync trigger in debug builds
+- Show sync status details in debug builds
+- Include CloudKit dashboard link in debug menu
+
+---
+
+## Notes for Cursor AI
+
+When implementing features:
+1. Ask clarifying questions if requirements are ambiguous
+2. State which rules you're applying
+3. Check existing code before creating new patterns
+4. Prioritize simplicity and Apple's native patterns
+5. Test edge cases thoroughly
+6. Write defensive code that handles failures gracefully
+7. Keep the user experience smooth and intuitive
+8. Follow iOS 18+ conventions and HIG strictly unless custom styling is explicitly requested
+
+Remember: Build apps that feel native to iOS, respect user data and privacy, work offline-first, and sync seamlessly with iCloud.
